@@ -10,6 +10,6 @@ var CognitoClient *cognitoidentityprovider.CognitoIdentityProvider
 
 func InitCognito() {
     CognitoClient = cognitoidentityprovider.New(session.Must(session.NewSession()), &aws.Config{
-        Region: aws.String("us-west-2"), // Set the region
+        Region: aws.String("us-east-2"), // Set the region
     })
 }

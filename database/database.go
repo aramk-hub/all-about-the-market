@@ -11,7 +11,7 @@ var DB *gorm.DB
 
 func ConnectDB() {
 	// Define the connection string (DSN)
-	dsn := "host=localhost user=aramkazorian password=kridershot dbname=portfolio_tracker port=5432 sslmode=disable"
+	dsn := "host=localhost user=postgres password=kridershot dbname=portfolio_tracker port=5432 sslmode=disable"
 	var err error
 
 	// Open the database connection
