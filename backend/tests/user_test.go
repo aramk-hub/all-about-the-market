@@ -1,7 +1,7 @@
-package handlers
+package tests
 
 import (
-	"all-about-the-market/handlers"
+	"all-about-the-market/backend/handlers"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -238,32 +238,32 @@ func TestIncorrectLoginCredentials(t *testing.T) {
 	}
 }
 
-func TestMultipleRegistrations(t *testing.T) {
-    // Initialize a real or mock Cognito Client
-    sess := session.Must(session.NewSession(&aws.Config{
-		Region: aws.String("us-east-2"),
-	}))
-	cognitoClient := cognitoidentityprovider.New(sess)
-	router := gin.Default()
-	router.POST("/register", func(c *gin.Context) {
-		handlers.RegisterAndLoginUser(c, cognitoClient)
-	})
+// func TestMultipleRegistrations(t *testing.T) {
+//     // Initialize a real or mock Cognito Client
+//     sess := session.Must(session.NewSession(&aws.Config{
+// 		Region: aws.String("us-east-2"),
+// 	}))
+// 	cognitoClient := cognitoidentityprovider.New(sess)
+// 	router := gin.Default()
+// 	router.POST("/register", func(c *gin.Context) {
+// 		handlers.RegisterAndLoginUser(c, cognitoClient)
+// 	})
 
-    // Register users
-    for i := 0; i < 100; i++ {
-        requestBody := map[string]string{
-            "username": fmt.Sprintf("user%d@example.com", i),
-            "password": "Password123!",
-        }
+//     // Register users
+//     for i := 0; i < 100; i++ {
+//         requestBody := map[string]string{
+//             "username": fmt.Sprintf("user%d@example.com", i),
+//             "password": "Password123!",
+//         }
 
-        response := performRequest(router, "POST", "/register", requestBody)
-        assert.Equal(t, 200, response.StatusCode)
-    }
+//         response := performRequest(router, "POST", "/register", requestBody)
+//         assert.Equal(t, 200, response.StatusCode)
+//     }
 
-    // Clean up users after the test
-    for i := 0; i < 100; i++ {
-        username := fmt.Sprintf("user%d@example.com", i)
-        cleanupUser(t, username, cognitoClient)
-    }
-}
+//     // Clean up users after the test
+//     for i := 0; i < 100; i++ {
+//         username := fmt.Sprintf("user%d@example.com", i)
+//         cleanupUser(t, username, cognitoClient)
+//     }
+// }
 

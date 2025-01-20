@@ -4,7 +4,7 @@ import (
 	"log"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
-	"all-about-the-market/models" // Adjust with your actual project path
+	"all-about-the-market/backend/models" // Adjust with your actual project path
 )
 
 var DB *gorm.DB

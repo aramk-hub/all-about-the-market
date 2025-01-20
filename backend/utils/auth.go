@@ -3,7 +3,7 @@ package utils
 import (
     "github.com/dgrijalva/jwt-go"
     "time"
-    "os"
+    // "os"
 )
 
 var secretKey = []byte("your_secret_key") // Use environment variables for sensitive info

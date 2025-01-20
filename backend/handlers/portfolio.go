@@ -2,8 +2,8 @@ package handlers
 
 import (
 	"github.com/gin-gonic/gin"
-	"all-about-the-market/models"
-	"all-about-the-market/database"
+	"all-about-the-market/backend/models"
+	"all-about-the-market/backend/database"
 	"net/http"
 )
 
