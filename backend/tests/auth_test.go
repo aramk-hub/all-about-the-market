@@ -14,10 +14,13 @@ import (
 )
 
 func TestMain(m *testing.M) {
-	// Load environment variables from .env
-	err := godotenv.Load("../cmd/.env") // Adjust path as needed
-	if err != nil {
-		log.Fatalf("Error loading .env file: %v", err)
+	// Check if we're running in a CI environment
+	if os.Getenv("CI") != "true" {
+		// Load environment variables from the .env file if not in CI
+		err := godotenv.Load("../cmd/.env")
+		if err != nil {
+			log.Fatalf("Error loading .env file: %v", err)
+		}
 	}
 
 	log.Println("Environment variables loaded successfully")

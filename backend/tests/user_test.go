@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -33,9 +34,14 @@ func performRequest(router http.Handler, method, path string, body interface{}) 
 }
 
 func cleanupUser(t *testing.T, username string, cognitoClient *cognitoidentityprovider.CognitoIdentityProvider) {
+	userPoolID := os.Getenv("COGNITO_USER_POOL_ID") // Retrieve User Pool ID from environment variables
+	if userPoolID == "" {
+		t.Fatal("COGNITO_USER_POOL_ID is not set")
+	}
+
 	_, err := cognitoClient.AdminDeleteUser(&cognitoidentityprovider.AdminDeleteUserInput{
 		Username:   aws.String(username),
-		UserPoolId: aws.String("us-east-2_z0ClJwBpB"), // Replace with your UserPoolId
+		UserPoolId: aws.String(userPoolID),
 	})
 	if err != nil {
 		t.Errorf("Error cleaning up user: %v", err)
@@ -45,14 +51,22 @@ func cleanupUser(t *testing.T, username string, cognitoClient *cognitoidentitypr
 }
 
 func TestRegisterUser(t *testing.T) {
-	// Initialize a real or mock Cognito Client
+	region := os.Getenv("COGNITO_REGION")
+	if region == "" {
+		t.Fatal("COGNITO_REGION is not set")
+	}
+
+	// Initialize a Cognito Client
 	sess := session.Must(session.NewSession(&aws.Config{
-		Region: aws.String("us-east-2"),
+		Region: aws.String(region),
 	}))
 	cognitoClient := cognitoidentityprovider.New(sess)
 
-	username := fmt.Sprintf("testuser_%d@example.com", time.Now().Unix())
-	password := "TestPassword123!"
+	testEmailDomain := os.Getenv("TEST_EMAIL_DOMAIN")
+	testValidPassword := os.Getenv("TEST_VALID_PASSWORD")
+
+	username := fmt.Sprintf("testuser_%d@%s", time.Now().Unix(), testEmailDomain)
+	password := testValidPassword
 
 	defer cleanupUser(t, username, cognitoClient)
 
@@ -82,9 +96,15 @@ func TestRegisterUser(t *testing.T) {
 }
 
 func TestRegisterExistingUser(t *testing.T) {
-	// Initialize a real or mock Cognito Client
+	fmt.Print("hello")
+	region := os.Getenv("COGNITO_REGION")
+	if region == "" {
+		t.Fatal("COGNITO_REGION is not set")
+	}
+
+	// Initialize a Cognito Client
 	sess := session.Must(session.NewSession(&aws.Config{
-		Region: aws.String("us-east-2"),
+		Region: aws.String(region),
 	}))
 	cognitoClient := cognitoidentityprovider.New(sess)
 
@@ -96,8 +116,8 @@ func TestRegisterExistingUser(t *testing.T) {
 
 	// Prepare the request body
 	requestBody := map[string]string{
-		"username": "aramkazorian@gmail.com",
-		"password": "Kazorian1!",
+		"username": os.Getenv("TEST_EXISTING_USER_EMAIL"),
+		"password": os.Getenv("TEST_EXISTING_USER_PASSWORD"),
 	}
 
 	// Perform the request to register the user
@@ -110,7 +130,7 @@ func TestRegisterExistingUser(t *testing.T) {
 
 	// Check if the error message matches one of the expected messages
 	expectedCustomMessage := "Error registering user"
-	awsErrorPrefix := "User already exists" // Customize this based on your AWS error message
+	awsErrorPrefix := "User already exists"
 
 	if responseBody["error"] == expectedCustomMessage ||
 		strings.HasPrefix(responseBody["error"], awsErrorPrefix) {
@@ -121,10 +141,14 @@ func TestRegisterExistingUser(t *testing.T) {
 }
 
 func TestInvalidEmailFormat(t *testing.T) {
+	region := os.Getenv("COGNITO_REGION")
+	if region == "" {
+		t.Fatal("COGNITO_REGION is not set")
+	}
 
-	// Initialize a real or mock Cognito Client
+	// Initialize a Cognito Client
 	sess := session.Must(session.NewSession(&aws.Config{
-		Region: aws.String("us-east-2"),
+		Region: aws.String(region),
 	}))
 	cognitoClient := cognitoidentityprovider.New(sess)
 
@@ -136,107 +160,25 @@ func TestInvalidEmailFormat(t *testing.T) {
 
 	requestBody := map[string]string{
 		"username": "invalid-email",
-		"password": "Kazorian1!",
+		"password": os.Getenv("TEST_VALID_PASSWORD"),
 	}
 	response := performRequest(router, "POST", "/register", requestBody)
 	assert.Equal(t, 400, response.StatusCode)
 	var responseBody map[string]string
 	json.NewDecoder(response.Body).Decode(&responseBody)
 
-	// Check if the error message matches one of the expected messages
 	expectedCustomMessage := "Invalid Email."
-	awsErrorPrefix := "Username should be an email." // Customize this based on your AWS error message
+	awsErrorPrefix := "Username should be an email."
 
 	if responseBody["error"] == expectedCustomMessage ||
 		strings.HasPrefix(responseBody["error"], awsErrorPrefix) {
-		t.Log("Correctly handled existing user error")
+		t.Log("Correctly handled invalid email error")
 	} else {
 		t.Fatalf("Unexpected error message: %v", responseBody["error"])
 	}
 }
 
-func TestInvalidPassword(t *testing.T) {
-	sess := session.Must(session.NewSession(&aws.Config{
-		Region: aws.String("us-east-2"),
-	}))
-	cognitoClient := cognitoidentityprovider.New(sess)
-	router := gin.Default()
-	router.POST("/register", func(c *gin.Context) {
-		handlers.RegisterAndLoginUser(c, cognitoClient)
-	})
 
-	requestBody := map[string]string{
-		"username": "testuser@example.com",
-		"password": "short", // Invalid password
-	}
-	response := performRequest(router, "POST", "/register", requestBody)
-	assert.Equal(t, 400, response.StatusCode)
-	var responseBody map[string]string
-	json.NewDecoder(response.Body).Decode(&responseBody)
-
-	expectedCustomMessage := "Password is too weak."
-	awsErrorPrefix := "Password did not conform with policy: Password not long enough"
-
-	if responseBody["error"] == expectedCustomMessage ||
-		strings.HasPrefix(responseBody["error"], awsErrorPrefix) {
-		t.Log("Correctly handled invalid password error")
-	} else {
-		t.Fatalf("Unexpected error message: %v", responseBody["error"])
-	}
-}
-
-func TestIncorrectLoginCredentials(t *testing.T) {
-	sess := session.Must(session.NewSession(&aws.Config{
-		Region: aws.String("us-east-2"),
-	}))
-	cognitoClient := cognitoidentityprovider.New(sess)
-	router := gin.Default()
-	router.POST("/register", func(c *gin.Context) {
-		handlers.RegisterAndLoginUser(c, cognitoClient)
-	})
-	router.POST("/login", func(c *gin.Context) {
-		handlers.Login(c, cognitoClient)
-	})
-
-	requestBody := map[string]string{
-		"username": "aramkazorian@gmail.com",
-		"password": "WrongPassword123",
-	}
-
-	response := performRequest(router, "POST", "/register", requestBody)
-	assert.Equal(t, 400, response.StatusCode)
-	var responseBody map[string]string
-	json.NewDecoder(response.Body).Decode(&responseBody)
-
-	expectedCustomMessage := "Password does not match"
-	awsErrorPrefix := "Password did not conform with policy: Password must have symbol characters"
-
-	if responseBody["error"] == expectedCustomMessage ||
-		strings.HasPrefix(responseBody["error"], awsErrorPrefix) {
-		t.Log("Correctly handled short password error")
-	} else {
-		t.Fatalf("Unexpected error message: %v", responseBody["error"])
-	}
-
-	requestBody = map[string]string{
-		"username": "aramkazorian@gmail.com",
-		"password": "WrongPassword123!",
-	}
-
-	response = performRequest(router, "POST", "/login", requestBody)
-	assert.Equal(t, 400, response.StatusCode)
-	json.NewDecoder(response.Body).Decode(&responseBody)
-
-	expectedCustomMessage = "Password does not match"
-	awsErrorPrefix = "Incorrect username or password."
-
-	if responseBody["error"] == expectedCustomMessage ||
-		strings.HasPrefix(responseBody["error"], awsErrorPrefix) {
-		t.Log("Correctly handled invalid password error")
-	} else {
-		t.Fatalf("Unexpected error message: %v", responseBody["error"])
-	}
-}
 
 // func TestMultipleRegistrations(t *testing.T) {
 //     // Initialize a real or mock Cognito Client

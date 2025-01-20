@@ -1,0 +1,79 @@
+name: Run Tests with Cognito
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: 1.23
+
+    - name: Install dependencies
+      run: go mod tidy
+
+    - name: Install ngrok
+      run: |
+        curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null && \
+        echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | sudo tee /etc/apt/sources.list.d/ngrok.list && \
+        sudo apt update && sudo apt install ngrok
+
+    - name: Start backend server
+      run: |
+        go run backend/cmd/main.go &
+        sleep 5 # Wait for the server to start
+
+    - name: Expose server with ngrok
+      id: ngrok
+      run: |
+        nohup ngrok http 8080 > /dev/null 2>&1 &
+        sleep 5
+        echo "NGROK_URL=$(curl -s http://localhost:4040/api/tunnels | jq -r '.tunnels[0].public_url')" >> $GITHUB_ENV
+
+    - name: Set environment variables dynamically
+      run: |
+        echo "COGNITO_REDIRECT_URI=${{ env.NGROK_URL }}/auth/callback" >> .env
+        echo "FRONTEND_REDIRECT_URL=${{ env.NGROK_URL }}/dashboard" >> .env
+
+    - name: Inject environment variables into secrets
+      run: |
+        echo "COGNITO_CLIENT_ID=${{ secrets.COGNITO_CLIENT_ID }}" >> .env
+        echo "COGNITO_DOMAIN=${{ secrets.COGNITO_DOMAIN }}" >> .env
+        echo "COGNITO_USER_POOL_ID=${{ secrets.COGNITO_USER_POOL_ID }}" >> .env
+        echo "JWKS_URL=${{ secrets.JWKS_URL }}" >> .env
+        echo "COGNITO_REGION=${{ secrets.COGNITO_REGION }}" >> .env
+        echo "TEST_EXISTING_USER_EMAIL=${{ secrets.TEST_EXISTING_USER_EMAIL }}" >> .env
+        echo "TEST_EXISTING_USER_PASSWORD=${{ secrets.TEST_EXISTING_USER_PASSWORD }}" >> .env
+        echo "TEST_EMAIL_DOMAIN=${{ secrets.TEST_EMAIL_DOMAIN }}" >> .env
+        echo "TEST_VALID_PASSWORD=${{ secrets.TEST_VALID_PASSWORD }}" >> .env
+        echo "AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}" >> .env
+        echo "AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}" >> .env
+        echo "AWS_REGION=${{ secrets.AWS_REGION }}" >> .env
+
+    - name: Run tests
+      env:
+        COGNITO_CLIENT_ID: ${{ secrets.COGNITO_CLIENT_ID }}
+        COGNITO_DOMAIN: ${{ secrets.COGNITO_DOMAIN }}
+        COGNITO_USER_POOL_ID: ${{ secrets.COGNITO_USER_POOL_ID }}
+        JWKS_URL: ${{ secrets.JWKS_URL }}
+        COGNITO_REDIRECT_URI: ${{ env.NGROK_URL }}/auth/callback
+        FRONTEND_REDIRECT_URL: ${{ env.NGROK_URL }}/dashboard
+        COGNITO_REGION: ${{ secrets.COGNITO_REGION }}
+        TEST_EXISTING_USER_EMAIL: ${{ secrets.TEST_EXISTING_USER_EMAIL }}
+        TEST_EXISTING_USER_PASSWORD: ${{ secrets.TEST_EXISTING_USER_PASSWORD }}
+        TEST_EMAIL_DOMAIN: ${{ secrets.TEST_EMAIL_DOMAIN }}
+        TEST_VALID_PASSWORD: ${{ secrets.TEST_VALID_PASSWORD }}
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        AWS_REGION: ${{ secrets.AWS_REGION }}
+      run: go clean -testcache && go test ./...
