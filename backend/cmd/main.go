@@ -2,11 +2,13 @@ package main
 
 import (
 	"log"
+	"time"
 
 	"all-about-the-market/backend/config"
 	"all-about-the-market/backend/database"
 	"all-about-the-market/backend/handlers"
 	"all-about-the-market/backend/utils"
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 )
@@ -39,10 +41,17 @@ func main() {
 	// Set up Gin router
 	r := gin.Default()
 
-	// Define route for Cognito authentication callback
-	r.GET("/auth/callback", func(c *gin.Context) {
-		handlers.AuthCallbackHandler(c.Writer, c.Request, appConfig)
-	})
+	// Add CORS middleware
+	r.Use(cors.New(cors.Config{
+		AllowOrigins:     []string{"http://localhost:3000"}, // Allow requests from the React app
+		AllowMethods:     []string{"GET", "POST", "OPTIONS"}, // Allow HTTP methods
+		AllowHeaders:     []string{"Content-Type", "Authorization"},
+		AllowCredentials: true, // Allow cookies to be sent
+		MaxAge:           12 * time.Hour, // Cache preflight response for 12 hours
+	}))
+
+	r.GET("/auth/callback", handlers.AuthCallbackHandler) // Callback route
+	r.GET("/api/token", handlers.TokenHandler) 
 
 	// Start server
 	log.Printf("Server started on :8080 with Cognito Domain: %s", appConfig.CognitoDomain)

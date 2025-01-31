@@ -4,54 +4,60 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
-	"os"
 	"strings"
-	"all-about-the-market/backend/utils"
+
 	"all-about-the-market/backend/config"
+	"all-about-the-market/backend/utils"
+
+	"github.com/gin-gonic/gin"
 )
 
-func AuthCallbackHandler(w http.ResponseWriter, r *http.Request, appConfig *config.AppConfig) {
+func AuthCallbackHandler(c *gin.Context) {
 	// Extract authorization code from query parameters
-	code := r.URL.Query().Get("code")
+	code := c.Query("code")
 	if code == "" {
 		log.Println("Authorization code not found")
-		http.Error(w, "Authorization code not found", http.StatusBadRequest)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Authorization code not found"})
 		return
 	}
-	log.Printf("Authorization code received: %s\n", code)
 
 	// Exchange the authorization code for tokens
+	appConfig := config.LoadEnvVariables() // Replace with your app's way of accessing AppConfig
 	tokens, err := exchangeCodeForTokensWithoutSecret(code, appConfig)
 	if err != nil {
 		log.Printf("Failed to exchange code for tokens: %v\n", err)
-		http.Error(w, "Failed to exchange code for tokens", http.StatusInternalServerError)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to exchange code for tokens"})
 		return
 	}
 
-	// Extract ID token
+	// Extract ID token and access token
 	idToken, ok := tokens["id_token"].(string)
 	if !ok {
 		log.Println("ID token missing from Cognito response")
-		http.Error(w, "ID token missing", http.StatusInternalServerError)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "ID token missing"})
 		return
 	}
 
 	// Validate the ID token
 	if _, err := utils.ValidateToken(idToken); err != nil {
 		log.Printf("Failed to validate ID token: %v\n", err)
-		http.Error(w, "Invalid ID token", http.StatusUnauthorized)
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid ID token"})
 		return
 	}
 
-	// Log the tokens for debugging (remove in production)
-	log.Printf("Tokens received: %+v\n", tokens)
-
-	// Redirect to the frontend application after successful authentication
-	frontendURL := os.Getenv("FRONTEND_REDIRECT_URL")
-	if frontendURL == "" {
-		frontendURL = "http://localhost:3000/dashboard" // Default fallback
+	accessToken, ok := tokens["access_token"].(string)
+	if !ok {
+		log.Println("Access token missing from Cognito response")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Access token missing"})
+		return
 	}
-	http.Redirect(w, r, frontendURL, http.StatusSeeOther)
+
+	// Set tokens as secure, HTTP-only cookies
+	c.SetCookie("id_token", idToken, 3600, "/", "", false, true)
+	c.SetCookie("access_token", accessToken, 3600, "/", "", false, true)
+
+	// Redirect the user to the frontend dashboard
+	c.Redirect(http.StatusSeeOther, "http://localhost:3000/dashboard")
 }
 
 // exchangeCodeForTokensWithoutSecret exchanges the authorization code for tokens without using a client secret
